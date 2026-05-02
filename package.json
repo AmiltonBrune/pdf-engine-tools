@@ -1,6 +1,6 @@
 {
   "name": "pdf-engine-tools",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Processamento otimizado de PDFs com workers paralelos, extração de texto e split.",
   "type": "module",
   "main": "./dist/index.cjs",
