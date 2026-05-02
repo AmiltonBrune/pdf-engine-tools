@@ -1,0 +1,67 @@
+{
+  "name": "pdf-engine-tools",
+  "version": "1.0.0",
+  "description": "Processamento otimizado de PDFs com workers paralelos, extração de texto e split.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean --treeshake --no-splitting --external pdf-lib --external pdf2json",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch --external pdf-lib --external pdf2json",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "prepublishOnly": "npm run build && npm test",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "pdf",
+    "pdf-processing",
+    "pdf-split",
+    "pdf-text",
+    "pdf-parser",
+    "pdf-workers",
+    "large-pdf",
+    "workers",
+    "parallel"
+  ],
+  "author": "Amilton Brune",
+  "license": "MIT",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amiltonbrune/pdf-engine-tools.git"
+  },
+  "bugs": {
+    "url": "https://github.com/amiltonbrune/pdf-engine-tools/issues"
+  },
+  "homepage": "https://github.com/amiltonbrune/pdf-engine-tools#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.9.1",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.9",
+    "tsup": "^8.5.0",
+    "typedoc": "^0.28.14",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pdf2json": "^4.0.0"
+  }
+}
