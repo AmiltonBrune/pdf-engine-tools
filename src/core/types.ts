@@ -18,6 +18,7 @@ export interface PdfProcessingResult {
   signatureDates?: string[];
   rawData?: unknown;
   error?: string;
+  errorPages?: number[];
 }
 
 export interface PdfChunk {
@@ -63,6 +64,7 @@ export interface ExtractResult {
   isSignedWithin2Days?: boolean;
   signatureDates?: string[];
   rawData?: unknown;
+  errorPages?: number[];
 }
 
 export interface SplitOptions {

@@ -26,6 +26,7 @@ export class PdfPipeline {
         isSignedWithin2Days: result.isSignedWithin2Days,
         signatureDates: result.signatureDates,
         rawData: result.rawData,
+        errorPages: result.errorPages,
       };
     } catch (error: any) {
       if (error instanceof PdfEngineError) throw error;
@@ -70,6 +71,7 @@ export class PdfPipeline {
       isSigned: successful.some((r) => r.isSigned),
       isSignedWithin2Days: successful.some((r) => r.isSignedWithin2Days),
       signatureDates: allDates,
+      errorPages: successful.flatMap((r) => r.errorPages || []),
     };
   }
 

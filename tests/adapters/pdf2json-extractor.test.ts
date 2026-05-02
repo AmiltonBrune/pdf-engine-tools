@@ -93,6 +93,104 @@ describe('Pdf2JsonExtractor', () => {
     });
   });
 
+  describe('extractPageByPage fallback', () => {
+    it('deve extrair página a página quando o documento principal falhar no pdf2json mas puder ser lido pelo pdf-lib', async () => {
+      const buffer = readFileSync(join(PDF_DIR, 'documento1.pdf'));
+      const ext = new Pdf2JsonExtractor();
+      const parseSpy = jest.spyOn(ext as any, 'parseWithPdf2Json');
+
+      // 1st call: full doc fails
+      parseSpy.mockImplementationOnce(() => Promise.resolve({ text: '', pageCount: 0, isCorrupted: true }));
+      // subsequent calls: real implementation for single pages
+      
+      const result = await ext.extract(buffer);
+      
+      expect(parseSpy).toHaveBeenCalled();
+      expect(result.pageCount).toBe(25);
+      expect(result.isCorrupted).toBe(false);
+      expect(result.errorPages).toEqual([]);
+      expect(result.text.length).toBeGreaterThan(0);
+      
+      parseSpy.mockRestore();
+    });
+
+    it('deve registrar as páginas com erro no array errorPages caso alguma página individual falhe', async () => {
+      const buffer = readFileSync(join(PDF_DIR, 'documento2.pdf'));
+      const ext = new Pdf2JsonExtractor();
+      const parseSpy = jest.spyOn(ext as any, 'parseWithPdf2Json');
+      
+      // 1ª chamada: principal falha
+      parseSpy.mockImplementationOnce(() => Promise.resolve({ text: '', pageCount: 0, isCorrupted: true }));
+      // 2ª chamada: página 1 falha
+      parseSpy.mockImplementationOnce(() => Promise.resolve({ text: '', pageCount: 0, isCorrupted: true }));
+      // 3ª e demais chamadas: sucesso mockado
+      parseSpy.mockImplementation(() => Promise.resolve({ text: 'texto da pagina extra', pageCount: 1, isCorrupted: false, isSigned: true, signatureDates: ['2024-01-01'] }));
+      
+      const result = await ext.extract(buffer);
+      
+      expect(result.errorPages).toContain(1);
+      expect(result.text).toContain('texto da pagina extra');
+      expect(result.isSigned).toBe(true);
+      expect(result.signatureDates).toContain('2024-01-01');
+      expect(result.isCorrupted).toBe(false);
+      
+      parseSpy.mockRestore();
+    });
+
+    it('deve marcar o documento como isCorrupted=true se TODAS as páginas falharem', async () => {
+      const buffer = readFileSync(join(PDF_DIR, 'documento2.pdf'));
+      const ext = new Pdf2JsonExtractor();
+      const parseSpy = jest.spyOn(ext as any, 'parseWithPdf2Json');
+      
+      parseSpy.mockImplementation(() => Promise.resolve({ text: '', pageCount: 0, isCorrupted: true }));
+      
+      const result = await ext.extract(buffer);
+      expect(result.isCorrupted).toBe(true);
+      expect(result.errorPages?.length).toBeGreaterThan(0);
+      
+      parseSpy.mockRestore();
+    });
+
+    it('deve lidar com falhas ao isolar páginas com pdf-lib (cobre try/catch interno do loop)', async () => {
+      const buffer = readFileSync(join(PDF_DIR, 'documento2.pdf'));
+      const ext = new Pdf2JsonExtractor();
+      const parseSpy = jest.spyOn(ext as any, 'parseWithPdf2Json');
+      
+      parseSpy.mockImplementationOnce(() => Promise.resolve({ text: '', pageCount: 0, isCorrupted: true }));
+      
+      const { PDFDocument } = require('pdf-lib');
+      const originalCreate = PDFDocument.create;
+      
+      // Força exceção ao tentar criar um PDFDocument para a página isolada
+      PDFDocument.create = jest.fn().mockRejectedValue(new Error('Mock create error'));
+      
+      const result = await ext.extract(buffer);
+      
+      expect(result.isCorrupted).toBe(true);
+      expect(result.errorPages?.length).toBeGreaterThan(0);
+      
+      PDFDocument.create = originalCreate;
+      parseSpy.mockRestore();
+    });
+
+    it('deve lidar com erros durante a estruturacao de dados apos o parsing do pdf2json (linha 144)', async () => {
+      const buffer = readFileSync(join(PDF_DIR, 'documento2.pdf'));
+      const ext = new Pdf2JsonExtractor();
+      const extractTextSpy = jest.spyOn(ext as any, 'extractText');
+      
+      // Força a extração de texto a quebrar
+      extractTextSpy.mockImplementationOnce(() => { throw new Error('Crash extracting text'); });
+      
+      // Isso fará com que o parse principal falhe e o fallback aconteça
+      const result = await ext.extract(buffer);
+      
+      // Vai tentar o fallback e extrair normalmente (já que mockamos só Once)
+      expect(result.isCorrupted).toBe(false);
+      
+      extractTextSpy.mockRestore();
+    });
+  });
+
   describe('extractText fallback (linhas 103-142)', () => {
     it('deve exercitar o fallback de extractText quando getRawTextContent retorna vazio', async () => {
       const buffer = readFileSync(join(PDF_DIR, 'documento1.pdf'));
