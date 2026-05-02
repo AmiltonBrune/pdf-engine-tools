@@ -19,6 +19,7 @@ describe('PdfPipeline', () => {
     isSignedWithin2Days: false,
     signatureDates: ['2024-01-15'],
     rawData: { Pages: [] },
+    errorPages: [2],
   };
 
   describe('process', () => {
@@ -33,6 +34,7 @@ describe('PdfPipeline', () => {
       expect(result.isSigned).toBe(true);
       expect(result.signatureDates).toEqual(['2024-01-15']);
       expect(result.rawData).toEqual({ Pages: [] });
+      expect(result.errorPages).toEqual([2]);
     });
 
     it('deve passar pageLimit ao extractor quando enablePageLimit=true', async () => {
@@ -69,6 +71,13 @@ describe('PdfPipeline', () => {
 
       const pipeline = new PdfPipeline(mockExtractor);
       await expect(pipeline.process(new Uint8Array([1]), {})).rejects.toThrow('Erro no pipeline: crash');
+    });
+
+    it('deve encapsular erro desconhecido (sem message)', async () => {
+      (mockExtractor.extract as jest.Mock).mockRejectedValue('something weird');
+
+      const pipeline = new PdfPipeline(mockExtractor);
+      await expect(pipeline.process(new Uint8Array([1]), {})).rejects.toThrow('Erro no pipeline: Erro desconhecido');
     });
   });
 
@@ -115,8 +124,8 @@ describe('PdfPipeline', () => {
 
     it('deve combinar múltiplos resultados com sucesso', () => {
       const results: PdfProcessingResult[] = [
-        { success: true, text: 'parte 1', pageCount: 5, originalPageCount: 5, isSigned: true, signatureDates: ['2024-01-15'], isSignedWithin2Days: false, truncated: false, isCorrupted: false, rawData: 'data1' },
-        { success: true, text: 'parte 2', pageCount: 10, originalPageCount: 10, isSigned: false, signatureDates: ['2024-01-20'], truncated: true, isCorrupted: false },
+        { success: true, text: 'parte 1', pageCount: 5, originalPageCount: 5, isSigned: true, signatureDates: ['2024-01-15'], isSignedWithin2Days: false, truncated: false, isCorrupted: false, rawData: 'data1', errorPages: [1] },
+        { success: true, text: 'parte 2', pageCount: 10, originalPageCount: 10, isSigned: false, signatureDates: ['2024-01-20'], truncated: true, isCorrupted: false, errorPages: [2] },
       ];
 
       const combined = pipeline.processMultiple(results);
@@ -129,6 +138,7 @@ describe('PdfPipeline', () => {
       expect(combined.isSigned).toBe(true);
       expect(combined.signatureDates).toEqual(['2024-01-15', '2024-01-20']);
       expect(combined.rawData).toBe('data1');
+      expect(combined.errorPages).toEqual([1, 2]);
     });
 
     it('deve deduplicar signatureDates', () => {

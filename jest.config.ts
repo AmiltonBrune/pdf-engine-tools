@@ -4,6 +4,12 @@ export default {
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],
+  // Runs before any module imports – patches process.stdout.write early
+  setupFiles: ['<rootDir>/tests/setup-stdout.ts'],
+  // Runs after Jest env is ready – patches console.*
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+  // Silences ALL console output during tests (belt-and-suspenders)
+  silent: true,
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/index.ts',

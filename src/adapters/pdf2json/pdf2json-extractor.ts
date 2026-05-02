@@ -39,7 +39,65 @@ export class Pdf2JsonExtractor implements PdfTextExtractor {
       }
     }
 
-    return this.parseWithPdf2Json(processBuffer, originalPageCount, truncated);
+    const result = await this.parseWithPdf2Json(processBuffer, originalPageCount, truncated);
+    if (result.isCorrupted) {
+      return this.extractPageByPage(processBuffer, originalPageCount, truncated);
+    }
+    return result;
+  }
+
+  private async extractPageByPage(
+    buffer: Buffer,
+    originalPageCount?: number,
+    truncated = false
+  ): Promise<ExtractResult> {
+    try {
+      const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+      const totalPages = pdfDoc.getPageCount();
+      let fullText = '';
+      const errorPages: number[] = [];
+      const allSignatureDates: string[] = [];
+      let isSigned = false;
+
+      for (let i = 0; i < totalPages; i++) {
+        try {
+          const singlePageDoc = await PDFDocument.create();
+          const [copiedPage] = await singlePageDoc.copyPages(pdfDoc, [i]);
+          singlePageDoc.addPage(copiedPage);
+          const singlePageBuffer = Buffer.from(await singlePageDoc.save());
+
+          const pageResult = await this.parseWithPdf2Json(singlePageBuffer, 1, false);
+
+          if (pageResult.isCorrupted) {
+            errorPages.push(i + 1);
+          } else {
+            fullText += (fullText ? ' ' : '') + pageResult.text;
+            if (pageResult.isSigned) isSigned = true;
+            if (pageResult.signatureDates) {
+              allSignatureDates.push(...pageResult.signatureDates);
+            }
+          }
+        } catch {
+          errorPages.push(i + 1);
+        }
+      }
+
+      const isSignedWithin2Days = this.isSignedWithinNDays(allSignatureDates, 2);
+
+      return {
+        text: fullText.trim(),
+        pageCount: totalPages,
+        originalPageCount: originalPageCount ?? totalPages,
+        truncated,
+        isCorrupted: errorPages.length === totalPages && totalPages > 0,
+        isSigned,
+        isSignedWithin2Days,
+        signatureDates: allSignatureDates,
+        errorPages,
+      };
+    } catch {
+      return { text: '', pageCount: 0, isCorrupted: true, originalPageCount, truncated };
+    }
   }
 
   private parseWithPdf2Json(
@@ -51,19 +109,17 @@ export class Pdf2JsonExtractor implements PdfTextExtractor {
       const parser = new PDFParser(null, false);
       let settled = false;
 
-      const fail = (error: string) => {
+      const fail = () => {
         if (settled) return;
         settled = true;
         resolve({ text: '', pageCount: 0, isCorrupted: true, originalPageCount, truncated });
       };
 
-      const timeout = setTimeout(() => fail('Timeout ao processar PDF'), 60000);
+      const timeout = setTimeout(fail, 60000);
 
       parser.on('pdfParser_dataReady', (data: any) => {
         if (settled) return;
-        settled = true;
         clearTimeout(timeout);
-
         try {
           const pages = data?.Pages || [];
           const text = this.extractText(parser, data);
@@ -72,6 +128,7 @@ export class Pdf2JsonExtractor implements PdfTextExtractor {
           const isSigned = this.hasSignature(pages, text);
           const isSignedWithin2Days = this.isSignedWithinNDays(signatureDates, 2);
 
+          settled = true;
           resolve({
             text,
             pageCount,
@@ -84,18 +141,18 @@ export class Pdf2JsonExtractor implements PdfTextExtractor {
             rawData: data,
           });
         } catch {
-          fail('Erro ao extrair texto');
+          fail();
         }
       });
 
-      parser.on('pdfParser_dataError', () => { clearTimeout(timeout); fail('Erro no parser'); });
-      (parser as any).on('error', () => { clearTimeout(timeout); fail('Erro interno'); });
+      parser.on('pdfParser_dataError', () => { clearTimeout(timeout); fail(); });
+      (parser as any).on('error', () => { clearTimeout(timeout); fail(); });
 
       try {
         parser.parseBuffer(buffer);
       } catch {
         clearTimeout(timeout);
-        fail('Erro ao iniciar parse');
+        fail();
       }
     });
   }
