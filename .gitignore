@@ -98,6 +98,7 @@ temp/
 # PDF test files (if any)
 *.pdf
 !examples/*.pdf
+!tests/pdfs/*.pdf
 
 # Documentation build
 docs/build/
